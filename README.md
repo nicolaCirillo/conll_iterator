@@ -12,7 +12,7 @@ A simple iterator that reads conll_files (https://universaldependencies.org/form
 
 SETUP
 -----
-
+pip install git+https://github.com/nicolaCirillo/conll_iterator.git
 
 GETTING STARTED
 ---------------
