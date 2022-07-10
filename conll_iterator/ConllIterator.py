@@ -2,188 +2,229 @@
 """
 Created on Tue Nov 17 08:01:55 2020
 
-@author: Nicola Cirillo
+@author: nicol
 """
 import codecs
-import json
 from os import path
+import json
+from typing import List, Optional #,Literal
 
+class EndOf:
+    def __init__(self, val):
+        self.val = val
 
-DEFAULT_IDX_DICT = {"id": 0, "surface": 1, "lemma": 2, "pos": 3}
-DEFAULT_LOWER = ['lemma']
-
+CONLLU = ['id', 'form', 'lemma', 'upos', 'xpos', 'feats', 'head', 
+                   'deprel', 'deps', 'misc']
 
 class ConllIterator:
     """Iterator for conll files.
 
-    A simple iterator that yields words or sentences contained in a conll file.
-    The behaviour of this iterator are controlled via 'set_itermode' method.
-    This iterator also generates a json file with the number of word and
-    sentences contained in the corpus.
+    A simple iterator that yields words, sentences or documents contained in a
+    conll file by incrementally reading it. 
+    The iterator also automatically generates a json file with the number of 
+    word, sentences and documents contained in the corpus.
 
     Parameters
     ----------
-    conll_file : str
+    corpus_file: str
         Path to the conll file.
-    idx_dict: dic, default = {'id': 0', surface': 1, 'lemma': 2, 'pos': 3}
-        Associate each index of the tab-separated lines of the conll file
-        with a keyword representing that feature.
-    lower: list, default=['lemma']
-        The list of elements that must be lowercased in the output of the
-        iterator.
+    fields: list of strings, default=CONNLU
+        The fields that are returned for each token. e.g. ['form', 'lemma'] 
+        will return only the form and the lemma of each token.
+    mode: ['tokens', 'sentences', 'documents'], default=sentences
+        Controls the behaviour of the iterator:
+            'tokens': each element yelded is a token.
+            'sentences': each element yelded is a sentence (list of tokens).
+            'documents': each element yelded is a document (list of sentences).
+    lower: list of strings, default=[]
+        The list of feature provided to this argument are lowecased.
+    join_char, optional: str
+        If provided, the fields of each token are joined with the string 
+        provided. Otherwise, a token is a tuple of its fields. e.g. '_' 
+        [the_the_DET, dog_dog_NOUN, barks_bark_VERB]
+    columns, list of strings, default=CONNLU
+        The list of the columns of the conll file. This parameter could be
+        changed to read other tab separated formats. 
     codec: str, default='utf8'
-        The codec used to open the conll file.
+        The codec used to decode the conll file.
 
     Examples
     ----------
-    >>> corpus = 'sample.conllu'
-    >>> idx_dict = {"id": 0, "surface": 1, "lemma": 2, "pos": 3}
-    >>> sentences = ConllIterator(corpus, idx_dict, codec='utf8')
-    >>> sentences.set_itermode('sent', keys=["lemma", "pos"])
+    >>> sentences = ConllIterator('my_conll', ['form', 'upos'])
     >>> for s in sentences:
     ...     print(s)
-    ['il\tDET', 'modifica\tNOUN', [...], '»\tPUNCT']
-    ['otto\tNUM', 'mese\tNOUN', [...], '.\tPUNCT']
+    [('the', 'DET'), ('modification', 'NOUN'), [...], ('»', 'PUNCT')]
+    [('eighth', 'NUM'), ('month', 'NOUN'), [...], ('.', 'PUNCT')]
     [...]
-    ['entrambi\tPRON', 'accomunare\tVERB', [...], '.\tPUNCT']
+    [('both', 'PRON'), ('equated', 'VERB'), [...], ('.', 'PUNCT')]
+
+    >>> sentences = ConllIterator('my_conll', ['form', 'upos'], join_char='/')
+    >>> for s in sentences:
+    ...     print(s)
+    ['the/DET', 'modification/NOUN', [...], '»/PUNCT']
+    ['eighth/NUM', 'month/NOUN', [...], './PUNCT']
+    [...]
+    ['both/PRON', 'equated/VERB', [...], './PUNCT']
 
     """
 
-    def __init__(self, conll_file: str, idx_dict=DEFAULT_IDX_DICT,
-                 lower=['lemma'], codec='utf8'):
-        self.idx_dict = idx_dict
-        self.lower = lower
-        self.filename = conll_file
+    def __init__(
+            self, 
+            corpus_file: str,
+            fields: List[str] = CONLLU,
+            #mode: Literal['tokens', 'sentences', 'documents'] = 'sentences', 
+            mode: str = 'sentences',  
+            lower: List[str] = [], 
+            join_char: str = False, 
+            columns: List[str] = CONLLU, 
+            codec: str = 'utf8'
+                ):
+
         self.codec = codec
-        self._itermode = 'sent'
-        self._itermode_kwargs = {'keys': 'all', 'join_values': '\t'}
-        info_file = self.filename.split('.')
-        info_file[-1] = 'info.json'
-        self.info_file = '.'.join(info_file)
+        self.filename = corpus_file
+        self.idx_dict = {c: i for i, c in enumerate(columns)}
+        self.lower = lower
+        self.mode = mode
+        self.fields = fields
+        self.join_char = join_char
+        self._open_corpus()
+        self.counts = {'tokens': 0, 'sentences': 0, 'documents': 0}
+        self.info_file = '.'.join(self.filename.split('.')[:-1]) + '_info.json'
         if path.exists(self.info_file):
             self._load_info()
         else:
+            self.docs = None
             self.sentences = None
             self.tokens = None
             self._save_info()
-
-    def set_itermode(self, mode, keys='all',
-                     join_values=False, ignore_compound=False):
-        """Controls the behaviour of the iterator.
-
-        If mode is set to 'word', the iterator yields the words, if it is set
-        'sent', then the iterator yelds the sentences.
-
-        Parameters
-        ----------
-        mode : {'word', 'sent'}
-           Controls whether to iterate over words or sentences
-        keys: list, optional
-            The list of the features of a word that are retuned (default is
-            'all' which implies that all the elements passed to the 'idx_dict'
-            argument of the constructor)
-        join_values: str or False, default='False'
-            If a string is passed, each word will be represented as a string in
-            which the feature of the word are joined with the value passed to
-            this argument. If False is passed, each word will be represented as
-            a list of his features.
-        ignore_compound: bool, default= False
-            If True, skips words that have been separated (in which the 'id'
-            feature contains a '-'). Make sure to pass the 'id' key to the
-            'idx_dict'  argument of the constructor if you set this
-            parameter to True.
-
-        """
-        assert (not ignore_compound) or 'id' in self.idx_dict
-        self._itermode = mode
-        self._itermode_kwargs = {'keys': keys, 'join_values': join_values,
-                                 'ignore_compound': ignore_compound}
-
-    def _is_compound(self, line):
-        if line == '':
-            return False
-        else:
-            values = line.split('\t')
-            id_ = self._get_value('id', values)
-            if '-' in id_:
-                return True
-            else:
-                return False
-
-    def _get_value(self, key, values):
-        idx = self.idx_dict[key]
-        try:
-            if key in self.lower:
-                return values[idx].lower()
-            else:
-                return values[idx]
-        except IndexError:
-            return "_"
-
-    def _parse_line(self, line, keys, join_values):
-        line = line.strip()
-        if keys == 'all':
-            keys = list(self.idx_dict.keys())
-        if line == '':
-            return None
-        values = line.split('\t')
-        out_values = [self._get_value(key, values) for key in keys]
-        if join_values:
-            out_values = join_values.join(out_values)
-        return out_values
+    
+    def _open_corpus(self):
+        self.corpus = codecs.open(self.filename, 'r', self.codec)
+    
+    def close(self):
+        self.corpus.close()
 
     def _save_info(self):
-        info = {'tokens': self.tokens, 'sentences': self.sentences}
         with codecs.open(self.info_file, 'w', 'utf8') as fileout:
-            json.dump(info, fileout)
+            json.dump(self.counts, fileout)
 
     def _load_info(self):
         with codecs.open(self.info_file, 'r', 'utf8') as filein:
             info = json.load(filein)
-        self.sentences, self.tokens = info['sentences'], info['tokens']
+        self.sentences = info['sentences']
+        self.tokens = info['tokens']
+        self.docs = info['documents']
+    
+    def _get_value(self, field, row):
+        idx = self.idx_dict[field]
+        try:
+            if field in self.lower:
+                return row[idx].lower()
+            else:
+                return row[idx]
+        # not  very professional :(
+        except IndexError:
+            return "_"
 
-    def _iter_words(self, keys, join_values, ignore_compound):
-        corpus = codecs.open(self.filename, 'r', self.codec)
-        for line in corpus:
-            if line.startswith('#'):
-                continue
-            if ignore_compound:
-                if self._is_compound(line):
-                    continue
-            yield self._parse_line(line, keys, join_values)
-        corpus.close()
+    @staticmethod
+    def _is_comment(line):
+        if line.startswith('#'):
+            return True
+        else:
+            return False
 
-    def _iter_sent(self, keys, join_values, ignore_compound):
+    def _parse_line(self, line):
+        if self._is_comment(line):
+            if line.startswith('# newdoc'):
+                self.counts['documents'] += 1
+                return EndOf('D')
+            else: return None
+        if line == '\n':
+            self.counts['sentences'] += 1
+            return EndOf('S')
+        else:
+            self.counts['tokens'] += 1
+            line = line.strip()
+            row = line.split('\t')
+            values = tuple([self._get_value(f, row) for f in self.fields])
+            if self.join_char:
+                values = self.join_char.join(values)
+            return values
+
+    def _next_token(self):
+        line = next(self.corpus)
+        while line:
+            line = self._parse_line(line)
+            if line is None:
+                pass
+            elif type(line) == EndOf:
+                pass
+            else: return line
+            line = next(self.corpus)
+
+    def _next_sentence(self):
         sent = list()
-        for line in self._iter_words(keys, join_values, ignore_compound):
-            if line:
-                sent.append(line)
-            elif sent:
-                yield sent
-                sent = list()
+        line = next(self.corpus)
+        while line:
+            line = self._parse_line(line)
+            if line is None:
+                pass
+            elif type(line) == EndOf:
+                if line.val == 'S' and sent:
+                    return sent
+            else: sent.append(line)
+            line = next(self.corpus)
+
+    def _next_doc(self):
+        doc = list()
+        sent = list()
+        line = next(self.corpus)
+        while line:
+            line = self._parse_line(line)
+            if line is None:
+                pass
+            elif type(line) == EndOf:
+                if line.val == 'D' and doc:
+                    return doc
+                elif line.val == 'S' and sent:
+                    doc.append(sent)
+                    sent = list()
+            else: sent.append(line)
+            try:
+                line = next(self.corpus)
+            except StopIteration:
+                if doc: return doc
+    
+    def _get_next(self):
+        if self.mode == 'tokens':
+            return self._next_token()
+        elif self.mode == 'sentences':
+            return self._next_sentence()
+        elif self.mode == 'documents':
+            return self._next_doc()
+        else: raise NotImplementedError
+
+    def __next__(self):
+        return self._get_next()
 
     def __iter__(self):
-        mode, kwargs = self._itermode, self._itermode_kwargs
-        if mode == 'sent':
-            if self.sentences is None:
-                for i, item in enumerate(self._iter_sent(**kwargs)):
-                    yield item
-                self.sentences = i+1
-                self._save_info()
-            else:
-                for item in self._iter_sent(**kwargs):
-                    yield item
-        elif mode == 'word':
-            if self.tokens is None:
-                for i, item in enumerate(self._iter_words(**kwargs)):
-                    yield item
-                self.tokens = i+1
-                self._save_info()
-            else:
-                for item in self._iter_words(**kwargs):
-                    yield item
-        else:
-            raise ValueError(mode)
+        self.counts = {'tokens': 0, 'sentences': 0, 'documents': 0}
+        while self.corpus:
+            try:
+                yield next(self)
+            except StopIteration:
+                break
+        self._save_info()
+        self._load_info()
+        self._open_corpus()
+
+    def __len__(self):
+        if self.mode == 'tokens':
+            return self.tokens
+        if self.mode == 'sentences':
+            return self.sentences
+        if self.mode == 'documents':
+            return self.docs
 
     def sample(self, n=100):
         """Prints the first n elements yielded by this iterator.
@@ -191,7 +232,7 @@ class ConllIterator:
         Parameters
         ----------
         n: int, default=100
-            The number of elements to print.
+            The number of elements to be printed.
 
         """
         for i, item in enumerate(self):
@@ -199,24 +240,21 @@ class ConllIterator:
             if i >= n:
                 break
 
-    def save_as_text(self, filename: str, keys='all', join_values='\t',
-                     ignore_compound=False):
-        """Save the sentences yielded by this iterator in a text file.
+    def sentences2text(self, filename: str, join_char: str):
+        """Save the sentences yielded by this iterator into a text file.
 
         Parameters
         ----------
         filename: str
-        keys: dict, optional
-            The list of the features of a word that are retuned (default is
-            'all' which implies that all the elements passed to the 'idx_dict'
-            argument of the constructor are returned)
-        join_values: str, default='\t'
-            Each word will be represented as a string in which the feature of
-            the word are joined with the value passed to this argument.
+            The path to the output file
+        join_char: str,
+            Each token will be represented as a string in which the tokens's
+            fields are joined with the string provided.
 
         """
-        assert join_values
+        tmp_mode, tmp_join_char = self.mode, self.join_char
+        self.mode, self.join_char = "sentences", join_char
         with codecs.open(filename, 'w', 'utf8') as fileout:
-            sentences = self._iter_sent(keys, join_values, ignore_compound)
-            for sent in sentences:
+            for sent in self:
                 fileout.write(' '.join(sent) + '\n')
+        self.mode, self.join_char =  tmp_mode, tmp_join_char
