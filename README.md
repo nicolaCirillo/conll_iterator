@@ -26,7 +26,7 @@ from tqdm import tqdm
 
 
 sentences = ConllIterator('sample/sample_corpus.conllu', 
-                         features=['form', 'upos'], 
+                         fields=['form', 'upos'], 
                          mode='sentences', 
                          join_char='/')
 
