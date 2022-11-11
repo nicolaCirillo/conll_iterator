@@ -1,1 +1,1 @@
-from .ConllIterator import ConllIterator
+from .ConllIterator import *
