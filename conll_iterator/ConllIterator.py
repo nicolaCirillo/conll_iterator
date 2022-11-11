@@ -16,8 +16,8 @@ class EndOf:
 CONLLU = ['id', 'form', 'lemma', 'upos', 'xpos', 'feats', 'head', 
                    'deprel', 'deps', 'misc']
 
-WAC = ['form', 'lemma', 'pos', 'id', 'xpos', 'feats', 'head', 
-                   'deprel', 'deps', 'misc']
+WAC = ['form', 'lemma', 'pos', 'id', 'head', 'misc']
+
 
 class ConllIterator:
     """Iterator for conll files.
