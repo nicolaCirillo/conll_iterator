@@ -9,7 +9,7 @@ from os import path
 import json
 from typing import List, Optional #,Literal
 
-class EndOf:
+class _EndOf:
     def __init__(self, val):
         self.val = val
 
@@ -140,11 +140,11 @@ class ConllIterator:
         if self._is_comment(line):
             if line.startswith('# newdoc'):
                 self.counts['documents'] += 1
-                return EndOf('D')
+                return _EndOf('D')
             else: return None
         if line == '\n':
             self.counts['sentences'] += 1
-            return EndOf('S')
+            return _EndOf('S')
         else:
             self.counts['tokens'] += 1
             line = line.strip()
@@ -160,7 +160,7 @@ class ConllIterator:
             line = self._parse_line(line)
             if line is None:
                 pass
-            elif type(line) == EndOf:
+            elif type(line) == _EndOf:
                 pass
             else: return line
             line = next(self.corpus)
@@ -172,7 +172,7 @@ class ConllIterator:
             line = self._parse_line(line)
             if line is None:
                 pass
-            elif type(line) == EndOf:
+            elif type(line) == _EndOf:
                 if line.val == 'S' and sent:
                     return sent
             else: sent.append(line)
@@ -186,7 +186,7 @@ class ConllIterator:
             line = self._parse_line(line)
             if line is None:
                 pass
-            elif type(line) == EndOf:
+            elif type(line) == _EndOf:
                 if line.val == 'D' and doc:
                     return doc
                 elif line.val == 'S' and sent:
