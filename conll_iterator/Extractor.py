@@ -41,15 +41,16 @@ class Extractor:
         iterator: iterable
             The iterator of sentences from which to extract the sequences.
         
-        Yelds
-        ----------
+        Yields
+        ------
         list:
             A list containing the extracted sequences from the sentence (list
             is empty if no sequences match the patterns).
 
         """
         for item in iterator:
-            item = self._tagsent(item)
+            if self.dictionary:
+                item = self._tagsent(item)
             chunks = [item[i:i + 100] for i in range(0, len(item), 100)]
             for c in chunks:
                 tree = self.parser.parse(c)
