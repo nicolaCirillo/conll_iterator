@@ -13,6 +13,11 @@ A simple iterator that reads conll and conllu files (https://universaldependenci
 
 SETUP
 -----
+via pip:
+```
+pip install conll-iterator
+```
+via github:
 ```
 pip install git+https://github.com/nicolaCirillo/conll_iterator.git
 ```
