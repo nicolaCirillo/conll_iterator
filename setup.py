@@ -5,7 +5,7 @@ setup(
       name='conll_iterator',
       version='0.1',
       description='A simple iterator that reads conll files.',
-      url='#',
+      url='https://github.com/nicolaCirillo/conll_iterator',
       author='Nicola Cirillo',
       author_email='nicola.cirillo96@outlook.it',
       license='MIT',
