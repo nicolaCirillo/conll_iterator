@@ -142,7 +142,7 @@ class ConllIterator:
                 self.counts['documents'] += 1
                 return _EndOf('D')
             else: return None
-        if line == '\n':
+        if line == '\n' or line == '\r\n':
             self.counts['sentences'] += 1
             return _EndOf('S')
         else:
