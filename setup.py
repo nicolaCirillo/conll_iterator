@@ -10,4 +10,6 @@ setup(
       author_email='nicola.cirillo96@outlook.it',
       license='MIT',
       packages=find_packages(),
-      zip_safe=False)
+      zip_safe=False,
+      install_requires=['nltk'],
+      )
