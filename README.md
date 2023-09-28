@@ -85,3 +85,19 @@ for d in doc_tf:
 for i, k in enumerate(doc_keywords[:20]):
     print('keywords of doc {}:'.format(i+1), '; '.join(k))
 ```
+
+### Sequence extraction based on dependency tree
+
+```
+from conll_iterator import ConllIterator, DependencyExtractor
+
+xpaths = """//word[@upos="VERB" and word[@deprel="nsubj" and word[@upos="DET"]] and word[@deprel="obj"]]
+//word[@upos="VERB" and word[@deprel="nsubj"] and word[@deprel="obj"]]
+"""
+
+extractor = DependencyExtractor(xpaths, "form")
+sentences = ConllIterator("sample/sample_corpus.conllu")
+counter = extractor.count(sentences)
+for s, f in counter.most_common(10):
+    print(f"sequence: {s}; frequency: {f}")
+```

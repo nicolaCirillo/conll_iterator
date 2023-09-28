@@ -11,5 +11,5 @@ setup(
       license='MIT',
       packages=find_packages(),
       zip_safe=False,
-      install_requires=['nltk'],
+      install_requires=['nltk', 'lxml'],
       )

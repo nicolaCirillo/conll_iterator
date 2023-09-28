@@ -1,2 +1,2 @@
 from .ConllIterator import *
-from .Extractor import Extractor
+from .Extractor import Extractor, DependencyExtractor
