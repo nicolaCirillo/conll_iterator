@@ -33,8 +33,9 @@ class Extractor:
         for w, pos in sent:
             newsent.append((w, self.dictionary.get(w, pos)))
         return newsent
+    
 
-    def extract(self, iterator):
+    def extract(self, iterator, concordance=False):
         """Extract all the sequences matching a pattern.
 
         Parameters
@@ -42,11 +43,14 @@ class Extractor:
         iterator: iterable
             The iterator of sentences from which to extract the sequences.
         
+        concorance: bool, default=False
+            If True, yields also the sentences containing the matching object
+        
         Yields
         ------
         list:
             A list containing the extracted sequences from the sentence (list
-            is empty if no sequences match the patterns).
+            is empty if no sequence match the patterns).
 
         """
         for item in iterator:
@@ -57,8 +61,12 @@ class Extractor:
                 tree = self.parser.parse(c)
                 extracted = list()
                 _fromtree(tree, extracted)
-                yield extracted
-    
+                if concordance:
+                    yield extracted, " ".join(list(zip(*item))[0])
+                else:
+                    yield extracted
+
+
     def count(self, iterator) -> Counter:
         """Counts all the sequences matching a pattern.
 
@@ -74,7 +82,7 @@ class Extractor:
         """
         counter = Counter()
         for extr in self.extract(iterator):
-            counter.update(extr)        
+            counter.update(extr)  
         return counter
 
 class DependencyExtractor(Extractor):
