@@ -20,6 +20,6 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
-
+[tool.setuptools.packages.find]
 [project.urls]
 "Homepage" = "https://github.com/nicolaCirillo/conll_iterator"
