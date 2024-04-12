@@ -5,6 +5,10 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "conll_iterator"
 version = "0.2"
+dependencies = [
+    "nltk",
+    "lxml",
+]
 authors = [
   { name="Nicola Cirillo", email="nicola.cirillo96@outlook.it" },
 ]
